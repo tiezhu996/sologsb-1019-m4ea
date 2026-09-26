@@ -101,6 +101,10 @@ blockquote { margin: 7px 0; color: #2c4843; font-family: "Songti SC", serif; lin
 .inline-input { gap: 6px; margin-top: 5px; }
 .inline-input .native-input { min-width: 0; flex: 1; }
 .example-list { margin: 8px 0 18px; padding: 0 0 0 18px; color: #465a55; font-size: 11px; line-height: 1.6; }
+.example-list li { margin-bottom: 4px; }
+.example-owner { display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 8px; background: #e3efe9; color: #2f5d52; font-size: 9px; font-weight: 700; }
+.split-heading { display: flex; justify-content: space-between; margin-top: 14px; color: #53625e; font-size: 11px; font-weight: 700; }
+.split-heading span { color: #87948f; font-weight: 400; }
 .muted { margin: 10px 0; color: #8c9893; font-size: 11px; }
 .empty-state { margin: 30px 18px; padding: 28px 16px; text-align: center; color: #7a8882; background: #f4f6f3; border: 1px dashed #cbd5d0; border-radius: 10px; font-size: 12px; line-height: 1.6; }
 .compare-intro { margin-top: 14px; color: var(--muted); font-size: 11px; line-height: 1.55; }

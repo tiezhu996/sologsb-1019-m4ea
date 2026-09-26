@@ -191,7 +191,32 @@ export function useCodingStore() {
 
   const mergeThemes = (sourceId: string, targetId: string) => {
     if (!sourceId || !targetId || sourceId === targetId) return;
-    transaction('合并主题', `${state.themes.find((item) => item.id === sourceId)?.name ?? sourceId} → ${state.themes.find((item) => item.id === targetId)?.name ?? targetId}`, (draft) => {
+    const source = state.themes.find((item) => item.id === sourceId);
+    const target = state.themes.find((item) => item.id === targetId);
+    if (!source || !target) return;
+    const duplicateCount = source.examples.filter((example) => target.examples.includes(example)).length;
+    const carried = [
+      source.definition.trim() ? '定义' : '',
+      source.memo.trim() ? '备忘录' : '',
+      source.examples.length ? `示例 ${source.examples.length} 条` : ''
+    ].filter(Boolean).join('、');
+    transaction('合并主题', `${source.name} → ${target.name}（${carried ? `并入${carried}` : '来源主题无文字资料'}${duplicateCount ? `，${duplicateCount} 条重复示例只留一条` : ''}）`, (draft) => {
+      const draftSource = draft.themes.find((theme) => theme.id === sourceId);
+      const draftTarget = draft.themes.find((theme) => theme.id === targetId);
+      if (!draftSource || !draftTarget) return;
+      if (draftSource.definition.trim()) {
+        draftTarget.definition = draftTarget.definition.trim()
+          ? `${draftTarget.definition}\n【并入自「${draftSource.name}」】${draftSource.definition}`
+          : draftSource.definition;
+      }
+      if (draftSource.memo.trim()) {
+        draftTarget.memo = draftTarget.memo.trim()
+          ? `${draftTarget.memo}\n【并入自「${draftSource.name}」】${draftSource.memo}`
+          : draftSource.memo;
+      }
+      draftSource.examples.forEach((example) => {
+        if (!draftTarget.examples.includes(example)) draftTarget.examples.push(example);
+      });
       draft.segments.forEach((segment) => {
         (['A', 'B'] as CoderId[]).forEach((coder) => {
           const codes = new Set(segment.assignments[coder].filter((id) => id !== sourceId));
@@ -205,12 +230,16 @@ export function useCodingStore() {
     });
   };
 
-  const splitTheme = (sourceId: string, newName: string, segmentIds: string[]) => {
+  const splitTheme = (sourceId: string, newName: string, segmentIds: string[], exampleTexts: string[]) => {
+    const source = state.themes.find((theme) => theme.id === sourceId);
+    if (!source) return;
     const newId = `t-${crypto.randomUUID()}`;
-    transaction('拆分主题', newName, (draft) => {
-      const source = draft.themes.find((theme) => theme.id === sourceId);
-      if (!source) return;
-      draft.themes.push({ ...source, id: newId, name: newName, examples: [] });
+    transaction('拆分主题', `${source.name} → ${newName}（迁移 ${segmentIds.length} 个片段、${exampleTexts.length} 条示例）`, (draft) => {
+      const draftSource = draft.themes.find((theme) => theme.id === sourceId);
+      if (!draftSource) return;
+      const movingExamples = draftSource.examples.filter((example) => exampleTexts.includes(example));
+      draft.themes.push({ ...draftSource, id: newId, name: newName, examples: movingExamples });
+      draftSource.examples = draftSource.examples.filter((example) => !exampleTexts.includes(example));
       draft.segments.forEach((segment) => {
         if (!segmentIds.includes(segment.id)) return;
         (['A', 'B'] as CoderId[]).forEach((coder) => {
@@ -267,22 +296,28 @@ export function useCodingStore() {
     const themeMap = new Map(state.themes.map((theme) => [theme.id, theme]));
     if (format === 'json') return JSON.stringify({ exportedAt: new Date().toISOString(), ...cloneState(state) }, null, 2);
     const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
+    const themePath = (id: string) => {
+      const names: string[] = [];
+      let current = themeMap.get(id);
+      while (current) {
+        names.unshift(current.name);
+        current = current.parentId ? themeMap.get(current.parentId) : undefined;
+      }
+      return names.join(' / ');
+    };
     const rows = [['片段编号', '时间', '发言人', '原文', '编码者', '主题路径', '备忘录'].map(escape).join(',')];
     state.segments.forEach((segment) => {
       (['A', 'B'] as CoderId[]).forEach((coder) => {
         const name = coder === 'A' ? state.coderA : state.coderB;
         const themeIds = segment.assignments[coder];
-        const paths = themeIds.length ? themeIds.map((id) => {
-          const names: string[] = [];
-          let current = themeMap.get(id);
-          while (current) {
-            names.unshift(current.name);
-            current = current.parentId ? themeMap.get(current.parentId) : undefined;
-          }
-          return names.join(' / ');
-        }) : ['未编码'];
+        const paths = themeIds.length ? themeIds.map(themePath) : ['未编码'];
         rows.push([segment.id, segment.time, segment.speaker, segment.text, name, paths.join(' | '), segmentMap.get(segment.id)?.note ?? ''].map(escape).join(','));
       });
+    });
+    rows.push('');
+    rows.push(['主题路径', '操作定义', '研究备忘录', '典型示例'].map(escape).join(','));
+    [...state.themes].sort((a, b) => themePath(a.id).localeCompare(themePath(b.id), 'zh-CN')).forEach((theme) => {
+      rows.push([themePath(theme.id), theme.definition, theme.memo, theme.examples.join(' ｜ ')].map(escape).join(','));
     });
     return `\uFEFF${rows.join('\n')}`;
   };

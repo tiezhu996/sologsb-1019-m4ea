@@ -80,7 +80,8 @@ export default function Inspector(props: { store: Store }) {
               </div>
             </label>
             <Show when={current().examples.length} fallback={<div class="muted">暂无示例</div>}>
-              <ul class="example-list"><For each={current().examples}>{(item) => <li>{item}</li>}</For></ul>
+              <div class="citation-heading">典型示例 <span>挂在「{current().name}」下 · {current().examples.length} 条</span></div>
+              <ul class="example-list"><For each={current().examples}>{(item) => <li><span class="example-owner">{current().name}</span>{item}</li>}</For></ul>
             </Show>
             <Show when={citations().length}>
               <div class="citation-heading">回原文引用 <span>{citations().length} 条</span></div>
@@ -135,10 +136,10 @@ export default function Inspector(props: { store: Store }) {
           <div><strong>{citations().length}</strong><span>条当前主题引用</span></div>
         </div>
         <div class="audit-list">
-          <For each={props.store.state.themes.filter((item) => item.definition || item.memo)}>{(item) => (
+          <For each={props.store.state.themes.filter((item) => item.definition || item.memo || item.examples.length)}>{(item) => (
             <div class="citation" onClick={() => props.store.selectTheme(item.id)}>
               <strong>{item.name}</strong>
-              <span>{item.definition ? '含操作定义' : ''}{item.definition && item.memo ? ' · ' : ''}{item.memo ? '含备忘录' : ''}</span>
+              <span>{[item.definition ? '含操作定义' : '', item.memo ? '含备忘录' : '', item.examples.length ? `${item.examples.length} 条示例` : ''].filter(Boolean).join(' · ')}</span>
             </div>
           )}</For>
         </div>
