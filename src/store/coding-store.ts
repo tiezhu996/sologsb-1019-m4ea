@@ -191,7 +191,21 @@ export function useCodingStore() {
 
   const mergeThemes = (sourceId: string, targetId: string) => {
     if (!sourceId || !targetId || sourceId === targetId) return;
-    transaction('合并主题', `${state.themes.find((item) => item.id === sourceId)?.name ?? sourceId} → ${state.themes.find((item) => item.id === targetId)?.name ?? targetId}`, (draft) => {
+    const sourceName = state.themes.find((item) => item.id === sourceId)?.name ?? sourceId;
+    const targetName = state.themes.find((item) => item.id === targetId)?.name ?? targetId;
+    const sourceBefore = state.themes.find((item) => item.id === sourceId);
+    const targetBefore = state.themes.find((item) => item.id === targetId);
+    const broughtExamples = sourceBefore && targetBefore
+      ? sourceBefore.examples.filter((example) => !targetBefore.examples.includes(example)).length
+      : 0;
+    const materialBits: string[] = [];
+    if (sourceBefore?.definition.trim()) materialBits.push('定义');
+    if (sourceBefore?.memo.trim()) materialBits.push('备忘录');
+    if (broughtExamples) materialBits.push(`${broughtExamples} 条新示例`);
+    const detail = `${sourceName} → ${targetName}${materialBits.length ? `（并入${materialBits.join('、')}）` : ''}`;
+    transaction('合并主题', detail, (draft) => {
+      const source = draft.themes.find((item) => item.id === sourceId);
+      const target = draft.themes.find((item) => item.id === targetId);
       draft.segments.forEach((segment) => {
         (['A', 'B'] as CoderId[]).forEach((coder) => {
           const codes = new Set(segment.assignments[coder].filter((id) => id !== sourceId));
@@ -200,17 +214,35 @@ export function useCodingStore() {
         });
       });
       draft.themes.forEach((theme) => { if (theme.parentId === sourceId) theme.parentId = targetId; });
+      if (source && target) {
+        if (source.definition.trim()) {
+          target.definition = [target.definition.trim(), `【并入自「${source.name}」】\n${source.definition.trim()}`]
+            .filter(Boolean).join('\n\n');
+        }
+        if (source.memo.trim()) {
+          target.memo = [target.memo.trim(), `【并入自「${source.name}」】\n${source.memo.trim()}`]
+            .filter(Boolean).join('\n\n');
+        }
+        const mergedExamples = [...target.examples];
+        source.examples.forEach((example) => { if (!mergedExamples.includes(example)) mergedExamples.push(example); });
+        target.examples = mergedExamples;
+      }
       draft.themes = draft.themes.filter((theme) => theme.id !== sourceId);
       draft.activeThemeId = targetId;
     });
   };
 
-  const splitTheme = (sourceId: string, newName: string, segmentIds: string[]) => {
+  const splitTheme = (sourceId: string, newName: string, segmentIds: string[], exampleIndices: number[] = []) => {
     const newId = `t-${crypto.randomUUID()}`;
-    transaction('拆分主题', newName, (draft) => {
+    transaction('拆分主题', `${newName}（迁出 ${segmentIds.length} 个片段${exampleIndices.length ? `、${exampleIndices.length} 条示例` : ''}）`, (draft) => {
       const source = draft.themes.find((theme) => theme.id === sourceId);
       if (!source) return;
-      draft.themes.push({ ...source, id: newId, name: newName, examples: [] });
+      const movedExamples = exampleIndices
+        .map((index) => source.examples[index])
+        .filter((example): example is string => Boolean(example));
+      draft.themes.push({ ...source, id: newId, name: newName, examples: movedExamples });
+      const moved = new Set(exampleIndices);
+      source.examples = source.examples.filter((_, index) => !moved.has(index));
       draft.segments.forEach((segment) => {
         if (!segmentIds.includes(segment.id)) return;
         (['A', 'B'] as CoderId[]).forEach((coder) => {
@@ -267,23 +299,42 @@ export function useCodingStore() {
     const themeMap = new Map(state.themes.map((theme) => [theme.id, theme]));
     if (format === 'json') return JSON.stringify({ exportedAt: new Date().toISOString(), ...cloneState(state) }, null, 2);
     const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
-    const rows = [['片段编号', '时间', '发言人', '原文', '编码者', '主题路径', '备忘录'].map(escape).join(',')];
+    const themePath = (id: string) => {
+      const names: string[] = [];
+      let current = themeMap.get(id);
+      while (current) {
+        names.unshift(current.name);
+        current = current.parentId ? themeMap.get(current.parentId) : undefined;
+      }
+      return names.join(' / ');
+    };
+    const rows = [['片段编码表', '', '', '', '', '', ''].map(escape).join(',')];
+    rows.push(['片段编号', '时间', '发言人', '原文', '编码者', '主题路径', '备忘录'].map(escape).join(','));
     state.segments.forEach((segment) => {
       (['A', 'B'] as CoderId[]).forEach((coder) => {
         const name = coder === 'A' ? state.coderA : state.coderB;
         const themeIds = segment.assignments[coder];
-        const paths = themeIds.length ? themeIds.map((id) => {
-          const names: string[] = [];
-          let current = themeMap.get(id);
-          while (current) {
-            names.unshift(current.name);
-            current = current.parentId ? themeMap.get(current.parentId) : undefined;
-          }
-          return names.join(' / ');
-        }) : ['未编码'];
+        const paths = themeIds.length ? themeIds.map((id) => themePath(id)) : ['未编码'];
         rows.push([segment.id, segment.time, segment.speaker, segment.text, name, paths.join(' | '), segmentMap.get(segment.id)?.note ?? ''].map(escape).join(','));
       });
     });
+    // 主题编码册：每个主题一行，定义、备忘录与典型示例随所属主题列出，示例分列展示归属
+    rows.push('');
+    rows.push(['主题编码册：定义、备忘录与典型示例的归属', '', '', '', '', '', ''].map(escape).join(','));
+    rows.push(['主题路径', '操作定义', '研究备忘录', '典型示例1', '典型示例2', '典型示例3', '更多示例'].map(escape).join(','));
+    [...state.themes]
+      .sort((a, b) => themePath(a.id).localeCompare(themePath(b.id), 'zh-CN'))
+      .forEach((theme) => {
+        const cells = [
+          themePath(theme.id),
+          theme.definition,
+          theme.memo,
+          ...theme.examples.slice(0, 3),
+          theme.examples.length > 3 ? theme.examples.slice(3).join(' ｜ ') : ''
+        ];
+        while (cells.length < 7) cells.splice(3, 0, '');
+        rows.push(cells.map(escape).join(','));
+      });
     return `\uFEFF${rows.join('\n')}`;
   };
 

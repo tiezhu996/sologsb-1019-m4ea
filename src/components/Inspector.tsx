@@ -14,6 +14,15 @@ export default function Inspector(props: { store: Store }) {
 
   const theme = createMemo(() => props.store.state.themes.find((item) => item.id === props.store.state.activeThemeId));
   const segment = createMemo(() => props.store.state.segments.find((item) => item.id === props.store.state.activeSegmentId));
+  const themePath = createMemo(() => {
+    const names: string[] = [];
+    let current = theme();
+    while (current) {
+      names.unshift(current.name);
+      current = current.parentId ? props.store.state.themes.find((item) => item.id === current!.parentId) : undefined;
+    }
+    return names;
+  });
   const citations = createMemo(() => {
     const current = theme();
     if (!current) return [];
@@ -59,7 +68,7 @@ export default function Inspector(props: { store: Store }) {
       <Show when={section() === 'theme'}>
         <Show when={theme()} fallback={<div class="empty-state">从中间主题树选择一个主题，添加定义、备忘录和示例。</div>}>
           {(current) => <>
-            <div class="selected-theme-title"><span style={{ background: current().color }} /> <strong>{current().name}</strong></div>
+            <div class="selected-theme-title"><span style={{ background: current().color }} /> <strong>{current().name}</strong><Show when={themePath().length > 1}><small class="theme-path-label">归属：{themePath().slice(0, -1).join(' / ')}</small></Show></div>
             <Show when={segment()}>
               {(activeSegment) => <div class="quote-card">
                 <div class="quote-meta">{activeSegment().time} · {activeSegment().speaker}</div>
@@ -73,13 +82,14 @@ export default function Inspector(props: { store: Store }) {
             <label class="field-label">研究备忘录
               <textarea class="native-textarea" value={memo()} onInput={(event) => setMemo(event.currentTarget.value)} onBlur={() => saveThemeField('memo', memo())} placeholder="记录判断边界、疑问或编码规则" />
             </label>
-            <label class="field-label">添加典型示例
+            <label class="field-label">添加典型示例（挂到「{current().name}」）
               <div class="inline-input">
                 <input class="native-input" value={example()} onInput={(event) => setExample(event.currentTarget.value)} placeholder="输入示例文本" />
                 <Button size="small" variant="contained" disabled={!example().trim()} onClick={() => { props.store.addExample(current().id, example()); setExample(''); }}>添加</Button>
               </div>
             </label>
-            <Show when={current().examples.length} fallback={<div class="muted">暂无示例</div>}>
+            <div class="citation-heading">「{current().name}」的典型示例 <span>{current().examples.length} 条</span></div>
+            <Show when={current().examples.length} fallback={<div class="muted">暂无示例（示例仅属于当前主题，合并/拆分时会随主题迁移）</div>}>
               <ul class="example-list"><For each={current().examples}>{(item) => <li>{item}</li>}</For></ul>
             </Show>
             <Show when={citations().length}>
@@ -135,10 +145,10 @@ export default function Inspector(props: { store: Store }) {
           <div><strong>{citations().length}</strong><span>条当前主题引用</span></div>
         </div>
         <div class="audit-list">
-          <For each={props.store.state.themes.filter((item) => item.definition || item.memo)}>{(item) => (
+          <For each={props.store.state.themes.filter((item) => item.definition || item.memo || item.examples.length)}>{(item) => (
             <div class="citation" onClick={() => props.store.selectTheme(item.id)}>
               <strong>{item.name}</strong>
-              <span>{item.definition ? '含操作定义' : ''}{item.definition && item.memo ? ' · ' : ''}{item.memo ? '含备忘录' : ''}</span>
+              <span>{item.definition ? '含操作定义' : ''}{(item.definition && (item.memo || item.examples.length)) ? ' · ' : ''}{item.memo ? '含备忘录' : ''}{(item.memo && item.examples.length) ? ' · ' : ''}{item.examples.length ? `示例 ${item.examples.length} 条` : ''}</span>
             </div>
           )}</For>
         </div>

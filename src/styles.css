@@ -92,6 +92,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .inspector-panel > div:not(.panel-heading):not(.inspector-tabs), .inspector-panel > label { margin-left: 17px; margin-right: 17px; }
 .selected-theme-title { gap: 7px; padding-top: 15px; font-family: "Songti SC", serif; font-size: 16px; }
 .selected-theme-title > span { width: 9px; height: 19px; border-radius: 2px; }
+.theme-path-label { margin-left: 4px; color: #8c9893; font-family: inherit; font-size: 10px; font-weight: 400; }
 .quote-card { margin-top: 13px; padding: 11px; border: 1px solid #d9e3df; border-radius: 9px; background: #f5f8f5; }
 .quote-meta { color: var(--muted); font-size: 10px; }
 blockquote { margin: 7px 0; color: #2c4843; font-family: "Songti SC", serif; line-height: 1.65; font-size: 12px; }
@@ -161,6 +162,8 @@ blockquote { margin: 7px 0; color: #2c4843; font-family: "Songti SC", serif; lin
 .merge-route strong { max-width: 130px; font-size: 12px; }
 .merge-route .native-select { flex: 1; }
 .split-list { max-height: 310px; overflow: auto; margin-top: 10px; border: 1px solid var(--line); border-radius: 9px; }
+.split-list.compact { max-height: 130px; margin-top: 5px; }
+.split-list.compact .split-item { padding: 7px 10px; }
 .split-item { display: grid; grid-template-columns: 22px 1fr; gap: 6px; padding: 10px; border-bottom: 1px solid #e5eae6; font-size: 11px; }
 .split-item:last-child { border-bottom: 0; }
 .split-item small { display: block; margin-top: 3px; color: var(--muted); line-height: 1.45; }
